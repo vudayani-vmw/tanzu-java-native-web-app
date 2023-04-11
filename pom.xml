@@ -43,11 +43,6 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
-			<groupId>com.vmware.tanzu.apps.appliveview</groupId>
-			<artifactId>application-live-view-commons</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-rsocket</artifactId>
 		</dependency>
