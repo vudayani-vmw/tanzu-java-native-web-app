@@ -4,42 +4,341 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.7.10</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<artifactId>spring-boot-starter-parent</artifactId> <version>2.7.0</version>
+		<relativePath />
 	</parent>
-	<groupId>com.example</groupId>
-	<artifactId>hello-native</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>hello-native</name>
-	<description>Demo project for Spring Boot Native</description>
+
+	<version>0.0.0</version>
+	<artifactId>tanzu-java-native-web-app</artifactId>
+	<name>tanzu-java-native-web-app</name>
+	<description>tanzu java native web app implementation</description>
+	<groupId>com.example.demo</groupId>
+
 	<properties>
 		<java.version>11</java.version>
+		<native.image>tanzu-java-native-web-app</native.image>
+		<start-class>com.example.demo.HelloNativeApplication</start-class>
+		<build.args>-Dspring.graal.remove-unused-autoconfig=true --initialize-at-run-time=io.netty.handler.codec.compression.BrotliDecoder --no-fallback -H:+ReportExceptionStackTraces -H:+AddAllCharsets --enable-url-protocols=http,https</build.args>
+		<spring-native.version>0.12.0</spring-native.version>
+		<graalvm.version>22.1.0</graalvm.version>
+		<okhttp3.version>4.9.0</okhttp3.version>
 	</properties>
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
 
+	<dependencies>
+		<dependency> <!-- Janino needed for logback to work in spring-native -->
+			<groupId>org.codehaus.janino</groupId>
+			<artifactId>janino</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context-indexer</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>com.vmware.tanzu.apps.appliveview</groupId>
+			<artifactId>application-live-view-commons</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-rsocket</artifactId>
+		</dependency>
+		<dependency>
+            <groupId>io.kubernetes</groupId>
+            <artifactId>client-java</artifactId>
+            <version>14.0.0</version>
+        </dependency>
+		<dependency>
+			<groupId>org.springframework.retry</groupId>
+			<artifactId>spring-retry</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-aspects</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.experimental</groupId>
+			<artifactId>spring-native</artifactId>
+			<version>${spring-native.version}</version>
 		</dependency>
 	</dependencies>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.graalvm.buildtools</groupId>
-				<artifactId>native-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-		</plugins>
-	</build>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.google.protobuf</groupId>
+				<artifactId>protobuf-java</artifactId>
+				<version>3.19.6</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-databind</artifactId>
+				<version>2.13.4.2</version>
+			</dependency>
+			<dependency>
+				<groupId>org.yaml</groupId>
+				<artifactId>snakeyaml</artifactId>
+				<version>1.31</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<profiles>
+		<profile>
+			<id>default</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>concourse-build</id>
+			<activation>
+				<property>
+					<!-- Activate only when docker host is set -->
+					<name>env.CONCOURSE_NON_NATIVE</name>
+				</property>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+						<configuration>
+							<image>
+								<name>dev.registry.tanzu.vmware.com/app-live-view/${project.artifactId}:${project.version}</name>
+								<publish>true</publish>
+								<builder>paketobuildpacks/builder-jammy-tiny</builder>
+								<env>
+									<BPE_APPEND_JAVA_TOOL_OPTIONS></BPE_APPEND_JAVA_TOOL_OPTIONS>
+									<BPE_DELIM_JAVA_TOOL_OPTIONS
+										xml:space="preserve"></BPE_DELIM_JAVA_TOOL_OPTIONS>
+								</env>
+							</image>
+							<docker>
+								<publishRegistry>
+									<username>${env.PIVNET_USER}</username>
+									<password>${env.PIVNET_PASSWORD}</password>
+									<url>https://dev.registry.tanzu.vmware.com/</url>
+									<email>kdvolder@vmware.com</email>
+								</publishRegistry>
+							</docker>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>build-image</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.experimental</groupId>
+						<artifactId>spring-aot-maven-plugin</artifactId>
+						<version>${spring-native.version}</version>
+						<executions>
+							<execution>
+								<id>bootstrap</id>
+								<phase>prepare-package</phase>
+								<goals>
+									<goal>generate</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<removeXmlSupport>false</removeXmlSupport>
+						</configuration>
+						<!-- <configuration> <removeYamlSupport>true</removeYamlSupport> <removeSpelSupport>true</removeSpelSupport>
+							</configuration> -->
+					</plugin>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+						<configuration>
+							<image>
+								<builder>paketobuildpacks/builder-jammy-tiny</builder>
+								<env>
+									<BP_NATIVE_IMAGE>true</BP_NATIVE_IMAGE>
+									<BP_NATIVE_IMAGE_BUILD_ARGUMENTS>${build.args}</BP_NATIVE_IMAGE_BUILD_ARGUMENTS>
+									<BPE_APPEND_JAVA_TOOL_OPTIONS></BPE_APPEND_JAVA_TOOL_OPTIONS>
+									<BPE_DELIM_JAVA_TOOL_OPTIONS
+										xml:space="preserve"> </BPE_DELIM_JAVA_TOOL_OPTIONS>
+
+								</env>
+							</image>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<profile>
+			<!-- using this profile requires GraalVM installed locally -->
+			<id>local.native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.nativeimage</groupId>
+						<artifactId>native-image-maven-plugin</artifactId>
+						<version>21.2.0</version>
+						<configuration>
+							<mainClass>${start-class}</mainClass>
+							<imageName>${project.artifactId}</imageName>
+							<buildArgs>
+								<buildArg>--initialize-at-run-time=io.netty.handler.codec.compression.BrotliDecoder</buildArg>
+								<buildArg>--no-fallback</buildArg>
+								<buildArg>-H:+ReportExceptionStackTraces</buildArg>
+								<buildArg>-H:+AddAllCharsets</buildArg>
+								<buildArg>--enable-url-protocols=http,https</buildArg>
+							</buildArgs>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>native-image</goal>
+								</goals>
+								<phase>package</phase>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>concourse-native-build</id>
+			<activation>
+				<property>
+					<!-- Activate only when docker host is set -->
+					<name>env.NATIVE_IMAGE</name>
+				</property>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.experimental</groupId>
+						<artifactId>spring-aot-maven-plugin</artifactId>
+						<version>${spring-native.version}</version>
+						<executions>
+							<execution>
+								<id>bootstrap-tests</id>
+								<phase>process-test-classes</phase>
+								<goals>
+									<goal>test-generate</goal>
+								</goals>
+							</execution>
+							<execution>
+								<id>bootstrap</id>
+								<phase>prepare-package</phase>
+								<goals>
+									<goal>generate</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<removeXmlSupport>false</removeXmlSupport>
+						</configuration>
+					</plugin>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+
+						<configuration>
+							<image>
+								<name>dev.registry.tanzu.vmware.com/app-live-view/${native.image}:${project.version}</name>
+								<publish>true</publish>
+								<env>
+									<BP_BOOT_NATIVE_IMAGE>true</BP_BOOT_NATIVE_IMAGE>
+									<BP_BOOT_NATIVE_IMAGE_BUILD_ARGUMENTS>${build.args}</BP_BOOT_NATIVE_IMAGE_BUILD_ARGUMENTS>
+
+									<BPE_APPEND_JAVA_TOOL_OPTIONS></BPE_APPEND_JAVA_TOOL_OPTIONS>
+                            		<BPE_DELIM_JAVA_TOOL_OPTIONS xml:space="preserve"> </BPE_DELIM_JAVA_TOOL_OPTIONS>
+								</env>
+								<!-- <builder>paketobuildpacks/builder@sha256:671809a0906a74fa1b1e600023525de8e064c87c80a2b8c7e8b2e8b739a448b2</builder>
+                        		<runImage>paketobuildpacks/run:base-cnb@sha256:59aa1da9db6d979e21721e306b9ce99a7c4e3d1663c4c20f74f9b3876cce5192</runImage>
+								<buildpacks>
+									<buildpack>paketo-buildpacks/ca-certificates@3.0.2</buildpack>
+									<buildpack>paketo-buildpacks/bellsoft-liberica@9.0.3</buildpack>
+									<buildpack>paketo-buildpacks/syft@1.6.0</buildpack>
+									<buildpack>paketo-buildpacks/executable-jar@6.0.2</buildpack>
+									<buildpack>paketo-buildpacks/spring-boot@5.3.1</buildpack>
+									<buildpack>paketo-buildpacks/native-image@5.0.2</buildpack>
+									<buildpack>paketo-buildpacks/environment-variables@4.0.2</buildpack>
+								</buildpacks> -->
+							</image>
+							<docker>
+								<publishRegistry>
+									<username>${env.PIVNET_USER}</username>
+									<password>${env.PIVNET_PASSWORD}</password>
+									<url>https://dev.registry.tanzu.vmware.com/</url>
+									<email>kdvolder@vmware.com</email>
+								</publishRegistry>
+							</docker>
+						</configuration>
+
+						<executions>
+							<execution>
+								<goals>
+									<goal>build-image</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+	<repositories>
+		<repository>
+			<id>spring-release</id>
+			<name>Spring release</name>
+			<url>https://repo.spring.io/milestone</url>
+		</repository>
+		<repository>
+			<id>spring-snapshots</id>
+			<name>Spring Snapshots</name>
+			<url>https://repo.spring.io/snapshot</url>
+			<releases>
+				<enabled>false</enabled>
+			</releases>
+		</repository>
+	</repositories>
+	<pluginRepositories>
+		<pluginRepository>
+			<id>spring-release</id>
+			<name>Spring release</name>
+			<url>https://repo.spring.io/milestone</url>
+		</pluginRepository>
+		<pluginRepository>
+			<id>spring-snapshots</id>
+			<name>Spring Snapshots</name>
+			<url>https://repo.spring.io/snapshot</url>
+		</pluginRepository>
+	</pluginRepositories>
 
 </project>
