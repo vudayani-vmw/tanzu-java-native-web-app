@@ -12,6 +12,6 @@ spec:
       autoscaling.knative.dev/minScale: "1"
   source:
     git:
-      url: https://github.com/vudayani-vmw/tanzu-java-native-web-app.git
+      url: https://github.com/vudayani-vmw/tanzu-java-native-web-app
       ref:
         branch: master
