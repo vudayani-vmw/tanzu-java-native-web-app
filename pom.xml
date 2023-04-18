@@ -16,7 +16,7 @@
 	<groupId>com.example.demo</groupId>
 
 	<properties>
-		<java.version>11</java.version>
+		<java.version>17</java.version>
 		<native.image>tanzu-java-native-web-app</native.image>
 		<start-class>com.example.demo.HelloNativeApplication</start-class>
 		<build.args>-Dspring.graal.remove-unused-autoconfig=true --initialize-at-run-time=io.netty.handler.codec.compression.BrotliDecoder --no-fallback -H:+ReportExceptionStackTraces -H:+AddAllCharsets --enable-url-protocols=http,https</build.args>
